@@ -236,10 +236,15 @@
     background:var(--panel);
     border:1px solid var(--line);
     border-radius:14px;
-    padding:18px;
     max-width:560px;
     width:100%;
     max-height:calc(100vh - 40px);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .modal-scroll{
+    padding:18px 18px 0;
     overflow-y:auto;
   }
   .modal h3{
@@ -263,7 +268,9 @@
     display:flex;
     justify-content:flex-end;
     gap:10px;
-    margin-top:14px;
+    padding:14px 18px;
+    flex-shrink:0;
+    border-top:1px solid var(--line);
   }
   .modal button{
     background:var(--panel-2);
@@ -350,21 +357,37 @@
   }
 
   /* feedback */
+  @keyframes ponyTrot{
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25%      { transform: translateY(-3px) rotate(-4deg); }
+    50%      { transform: translateY(0) rotate(0deg); }
+    75%      { transform: translateY(-1px) rotate(3deg); }
+  }
   .feedback-fab{
     position:fixed;
     right:16px;
     bottom:calc(16px + env(safe-area-inset-bottom));
     z-index:60;
-    width:44px; height:44px;
+    width:48px; height:48px;
     border-radius:50%;
     background:rgba(201,138,61,.9);
-    color:#181008;
     border:none;
-    font-size:1.15rem;
-    font-weight:700;
     cursor:pointer;
     box-shadow:0 6px 20px rgba(0,0,0,.4);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    animation:ponyTrot 2.6s ease-in-out infinite;
   }
+  .feedback-fab:hover{ animation-duration:.7s; }
+  .pony-icon{
+    display:grid;
+    grid-template-columns:repeat(10, 1fr);
+    grid-template-rows:repeat(10, 1fr);
+    width:26px; height:26px;
+  }
+  .pony-icon i{ display:block; }
+  .pony-icon i.on{ background:#181008; }
   .feedback-modal .modal{ max-width:420px; }
   .feedback-modal textarea{
     width:100%;
@@ -407,6 +430,7 @@
       <button id="swapPhoto"><span class="icon">🔄</span>Change photo</button>
       <button id="cropAgain"><span class="icon">✂️</span>Crop</button>
       <button id="resetActive"><span class="icon">↺</span>Reset</button>
+      <button id="flipPad" style="display:none;"><span class="icon">↔️</span>Flip</button>
       <div class="opacity-group" id="opacityGroup">
         <span>Opacity</span>
         <input type="range" id="opacitySlider" min="30" max="100" value="100">
@@ -425,6 +449,7 @@
     <button id="navHorse"><span class="icon">🐴</span>Horse</button>
     <button id="navPad"><span class="icon">🟪</span>Pad</button>
     <button id="navCompare" disabled><span class="icon">🔀</span>Compare</button>
+    <button id="navFullscreen" disabled><span class="icon">⛶</span>Fullscreen</button>
     <button id="navSave" disabled><span class="icon">💾</span>Save</button>
   </nav>
 </div>
@@ -445,9 +470,11 @@
 
 <div class="modal-backdrop" id="cropModal" style="display:none;">
   <div class="modal">
-    <h3 id="cropTitle">Crop</h3>
-    <p>Drag the corners to adjust, drag the middle to move &mdash; only the frame will be used.</p>
-    <canvas id="cropCanvas"></canvas>
+    <div class="modal-scroll">
+      <h3 id="cropTitle">Crop</h3>
+      <p>Drag the corners to adjust, drag the middle to move &mdash; only the frame will be used.</p>
+      <canvas id="cropCanvas"></canvas>
+    </div>
     <div class="modal-actions">
       <button id="cropChangePhoto" style="margin-right:auto;">Change photo</button>
       <button id="cropSkip">Use whole photo</button>
@@ -456,24 +483,28 @@
   </div>
 </div>
 
-<button class="feedback-fab" id="feedbackFab" title="Send feedback">?</button>
+<button class="feedback-fab" id="feedbackFab" title="Send feedback">
+  <div class="pony-icon" id="ponyIcon"></div>
+</button>
 
 <div class="modal-backdrop feedback-modal" id="feedbackModal" style="display:none;">
   <div class="modal">
-    <h3>Feedback</h3>
-    <p>Found a bug, or have an idea? Let us know.</p>
-    <form id="feedbackForm">
-      <select name="category">
-        <option value="bug">Bug</option>
-        <option value="idea">Idea</option>
-        <option value="other" selected>Other</option>
-      </select>
-      <textarea name="text" placeholder="What's on your mind?" required></textarea>
-      <input type="file" name="screenshot" accept="image/*">
-      <div class="feedback-status" id="feedbackStatus"></div>
-    </form>
+    <div class="modal-scroll">
+      <h3>🐴 Pony Express</h3>
+      <p>Bug, idea, or just want to say hi? Send it our way &mdash; the pony's fast.</p>
+      <form id="feedbackForm">
+        <select name="category">
+          <option value="bug">Bug</option>
+          <option value="idea">Idea</option>
+          <option value="other" selected>Other</option>
+        </select>
+        <textarea name="text" placeholder="What's on your mind?" required></textarea>
+        <input type="file" name="screenshot" accept="image/*">
+        <div class="feedback-status" id="feedbackStatus"></div>
+      </form>
+    </div>
     <div class="modal-actions">
-      <button id="feedbackCancel">Cancel</button>
+      <button id="feedbackCancel">Not now</button>
       <button class="primary" id="feedbackSubmit">Send</button>
     </div>
   </div>
@@ -505,6 +536,30 @@ function sendSessionEnd(){
 }
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') sendSessionEnd(); });
 
+// tiny hand-pixelled pony head for the feedback button
+const PONY_PIXELS = [
+  '0001110000',
+  '0011111000',
+  '0111111100',
+  '1111011110',
+  '1100011111',
+  '1000001111',
+  '0100001111',
+  '0110000110',
+  '0011000110',
+  '0001111100',
+];
+(function renderPonyIcon(){
+  const el = document.getElementById('ponyIcon');
+  PONY_PIXELS.forEach(row => {
+    [...row].forEach(bit => {
+      const i = document.createElement('i');
+      if(bit === '1') i.className = 'on';
+      el.appendChild(i);
+    });
+  });
+})();
+
 const placeholder = document.getElementById('placeholder');
 const displayCanvas = document.getElementById('displayCanvas');
 const displayCtx = displayCanvas.getContext('2d');
@@ -513,6 +568,7 @@ const navHorse = document.getElementById('navHorse');
 const navPad = document.getElementById('navPad');
 const navCompare = document.getElementById('navCompare');
 const navSave = document.getElementById('navSave');
+const navFullscreen = document.getElementById('navFullscreen');
 const dock = document.getElementById('dock');
 const dockToggle = document.getElementById('dockToggle');
 const floatControls = document.getElementById('floatControls');
@@ -603,6 +659,22 @@ navSave.addEventListener('click', () => {
   link.click();
   if(wasPadded) applyCanvasMode();
   render();
+});
+
+// ---- fullscreen (real Fullscreen API, standard expand icon) ----
+navFullscreen.addEventListener('click', () => {
+  if(navFullscreen.disabled) return;
+  if(!document.fullscreenElement){
+    (document.getElementById('stage').requestFullscreen?.() || Promise.resolve()).catch(() => {});
+  } else {
+    document.exitFullscreen?.();
+  }
+});
+document.addEventListener('fullscreenchange', () => {
+  const active = !!document.fullscreenElement;
+  navFullscreen.querySelector('.icon').textContent = active ? '⤡' : '⛶';
+  navFullscreen.classList.toggle('active', active);
+  if(active) logEvent('fullscreen_toggled');
 });
 
 // ---- before/after compare ----
@@ -709,13 +781,19 @@ resetBtn.addEventListener('click', () => {
     const w = frameContentW * 0.4;
     const h = w * (obj.img.height / obj.img.width);
     obj.x = frameContentW/2; obj.y = frameContentH/2;
-    obj.w = w; obj.h = h; obj.rot = 0;
+    obj.w = w; obj.h = h; obj.rot = 0; obj.flip = false;
   }
   render();
 });
 opacitySlider.addEventListener('input', e => {
   padOpacity = parseInt(e.target.value) / 100;
   opacityVal.textContent = e.target.value + '%';
+  render();
+});
+document.getElementById('flipPad').addEventListener('click', () => {
+  if(!objects.pad) return;
+  objects.pad.flip = !objects.pad.flip;
+  logEvent('transform_used', { target: 'pad', mode: 'flip' });
   render();
 });
 document.getElementById('tintSlider').addEventListener('input', e => {
@@ -728,9 +806,11 @@ function updateUI(){
   navPad.classList.toggle('active', editTarget === 'pad');
   navSave.disabled = !objects.horse;
   navCompare.disabled = !(objects.horse && objects.pad);
+  navFullscreen.disabled = !(objects.horse && objects.pad);
   floatControls.classList.toggle('show', !!editTarget);
   opacityGroup.classList.toggle('show', editTarget === 'pad');
   document.getElementById('tintGroup').classList.toggle('show', editTarget === 'pad');
+  document.getElementById('flipPad').style.display = editTarget === 'pad' ? 'flex' : 'none';
   renderPresetStrip();
   disarmReset();
   applyCanvasMode();
@@ -915,10 +995,20 @@ function drawObj(ctx, obj, alpha, filter){
   ctx.save();
   ctx.translate(obj.x, obj.y);
   ctx.rotate(obj.rot);
+  if(obj.flip) ctx.scale(-1, 1);
   ctx.globalAlpha = alpha;
   if(filter) ctx.filter = filter;
   ctx.drawImage(obj.img, -obj.w/2, -obj.h/2, obj.w, obj.h);
   ctx.restore();
+}
+
+// soft shadow under the pad so it reads as sitting on the horse rather than
+// pasted flat on top, plus whatever tint is currently dialed in
+function padFilter(){
+  const parts = [];
+  if(padHue) parts.push(`hue-rotate(${padHue}deg)`);
+  parts.push('drop-shadow(0 5px 7px rgba(0,0,0,.45))');
+  return parts.join(' ');
 }
 
 function render(showHandles = true){
@@ -931,7 +1021,7 @@ function render(showHandles = true){
   displayCtx.translate(canvasOffset, canvasOffset);
 
   drawObj(displayCtx, objects.horse, 1);
-  if(objects.pad) drawObj(displayCtx, objects.pad, padOpacity, padHue ? `hue-rotate(${padHue}deg)` : null);
+  if(objects.pad) drawObj(displayCtx, objects.pad, padOpacity, padFilter());
 
   if(showHandles && editTarget && objects[editTarget]) drawHandles(objects[editTarget]);
   displayCtx.restore();
@@ -947,7 +1037,7 @@ function renderLayerToDataURL(includePad){
   ctx.fillRect(0, 0, c.width, c.height);
   drawObj(ctx, objects.horse, 1);
   if(includePad && objects.pad){
-    drawObj(ctx, objects.pad, padOpacity, padHue ? `hue-rotate(${padHue}deg)` : null);
+    drawObj(ctx, objects.pad, padOpacity, padFilter());
   }
   return c.toDataURL('image/png');
 }

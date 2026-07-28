@@ -50,7 +50,7 @@ Die App ist jetzt eine echte Laravel-Anwendung, kein statisches HTML mehr. In Fo
 
 
 ## 8
-- [ ] Leichter Schatten fürs Pad-Overlay für realistischeren Look (CSS `filter: drop-shadow()`, an Lichtquelle von oben orientiert)
+- [x] Leichter Schatten fürs Pad-Overlay (Canvas `filter: drop-shadow()`, weich von oben)
 
 ## 9
-- [ ] Horizontal-Flip-Funktion fürs Pad (Toggle-Button, `transform: scaleX(-1)`), falls Pferd und Pad nicht in dieselbe Richtung schauen
+- [x] Horizontal-Flip-Funktion fürs Pad (Flip-Button im Pad-Bearbeiten-Panel, spiegelt per `ctx.scale(-1,1)`)
