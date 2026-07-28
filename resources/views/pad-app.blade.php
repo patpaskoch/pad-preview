@@ -6,7 +6,11 @@
 <meta name="theme-color" content="#0e1013">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pad Preview">
 <meta name="csrf-token" content="{{ csrf_token() }}">
+<link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+<link rel="apple-touch-icon" href="{{ asset('img/apple-touch-icon.png') }}">
+<link rel="icon" type="image/png" sizes="192x192" href="{{ asset('img/icon-192.png') }}">
 <title>Pad Preview</title>
 <style>
   :root{
@@ -535,6 +539,12 @@ function sendSessionEnd(){
   }
 }
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') sendSessionEnd(); });
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('{{ asset('sw.js') }}').catch(() => {});
+  });
+}
 
 const placeholder = document.getElementById('placeholder');
 const displayCanvas = document.getElementById('displayCanvas');

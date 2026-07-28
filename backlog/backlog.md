@@ -38,19 +38,20 @@
 - [x] Übersichtliche Liste des Logs (`/admin`, neueste zuerst, letzte 300 Einträge)
 - [x] Übersicht aller Feedback-Einträge inkl. Screenshot-Link (nur eingeloggt einsehbar)
 
-## Deploy-Hinweise für Forge (wichtig, einmalig)
-Die App ist jetzt eine echte Laravel-Anwendung, kein statisches HTML mehr. In Forge muss dafür einmalig eingerichtet werden:
-- **Deploy-Script** um `composer install --no-dev` und `php artisan migrate --force` ergänzen (Standard-Laravel-Deploy-Script in Forge macht das meist schon automatisch)
-- **`.env` auf dem Server** anlegen (Forge → Environment-Tab), Werte wie lokal in `.env.example`, plus:
-  - `APP_KEY` generieren (`php artisan key:generate` einmalig auf dem Server, oder Wert aus lokaler `.env` übernehmen)
-  - `ADMIN_PASSWORD_HASH` setzen — Hash lokal erzeugen mit:
-    `php artisan tinker --execute="echo Hash::make('deinpasswort');"`
-- **Storage-Verzeichnis beschreibbar machen**: `storage/` und `bootstrap/cache/` brauchen Schreibrechte für den Webserver-User (Forge macht das i. d. R. automatisch beim Deploy)
-- Webroot in Forge bleibt `public/` (Standard-Laravel-Konvention, unverändert)
-
+## Deploy-Hinweise für Forge (erledigt, zur Referenz)
+- **`.env`** in Forge → Environment-Tab gesetzt: `DB_CONNECTION=sqlite` (unbenutzt), `SESSION_DRIVER`/`CACHE_STORE=file`, `QUEUE_CONNECTION=sync` — keine echte Datenbank nötig
+- **Deploy-Script**: `php artisan migrate --force`-Zeile entfernt (nichts zu migrieren ohne DB)
+- **Storage-Verzeichnis**: `storage/` shared path zwischen Deploys aktiv (Forge-Default), damit die YAML-Logs/Feedback-Daten und Sessions über Deploys hinweg erhalten bleiben
+- Webroot bleibt `public/` (Standard-Laravel-Konvention)
 
 ## 8
 - [x] Leichter Schatten fürs Pad-Overlay (Canvas `filter: drop-shadow()`, weich von oben)
 
 ## 9
 - [x] Horizontal-Flip-Funktion fürs Pad (Flip-Button im Pad-Bearbeiten-Panel, spiegelt per `ctx.scale(-1,1)`)
+
+## 10. Als App installierbar (PWA)
+- [x] Web App Manifest (`manifest.webmanifest`) mit Name, Icons, Standalone-Modus
+- [x] App-Icons (192/512/Apple-Touch-Icon) aus dem Pony-Artwork generiert
+- [x] Minimaler Service Worker für Installierbarkeit (cached nur statische Icons, App-Seite/API bleiben immer live wegen Session/CSRF)
+- [ ] Optional später: echte Store-App via Capacitor (Android/iOS), falls Play Store/App Store-Präsenz gewünscht ist
