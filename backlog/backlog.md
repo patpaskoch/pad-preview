@@ -23,33 +23,30 @@
 - [x] Export/Speichern des fertigen Overlays als Bild (z. B. für Social Media oder Sattler/Verkäufer)
 
 ## 5. User-Tracking / Logging
-- [ ] Serverseitiges Logging einrichten (z. B. JSON-Zeilen in Datei oder DB-Tabelle)
-- [ ] Zu erfassende Events:
-  - Seitenaufruf (Timestamp, anonymisierte/gekürzte IP oder Session-ID, Referrer)
-  - Bild hochgeladen (Pferd/Pad)
-  - Zuschneiden/Drehen benutzt
-  - Fullscreen aktiviert
-  - Export/Speichern ausgeführt
-  - Verweildauer / Session-Ende
-- [ ] DSGVO-konform umsetzen (IP-Adressen kürzen/anonymisieren, kein Cookie-Consent-Zwang wenn möglich)
+- [x] Serverseitiges Logging eingerichtet — YAML-Datei (`storage/app/data/log.yaml`) statt DB-Tabelle, mit Filelock gegen Race Conditions bei gleichzeitigen Requests
+- [x] Erfasste Events: Seitenaufruf, Bild hochgeladen (Pferd/Pad), Zuschneiden benutzt, Verschieben/Skalieren/Drehen benutzt, Fullscreen (Dock eingeklappt), Export/Speichern, Session-Ende (Dauer via `sendBeacon`)
+- [x] DSGVO: IP-Adresse wird vor dem Speichern gekürzt (letztes Oktett/Gruppe genullt), kein Tracking-Cookie/Consent nötig
 
 ## 6. Feedback-Funktion
-- [ ] Floating Action Button (Fragezeichen-/Sprechblasen-Icon, fixiert unten rechts, dezente Akzentfarbe)
-- [ ] Klick öffnet Modal mit:
-  - Freitextfeld
-  - Optional: Kategorie (Bug / Idee / Sonstiges)
-  - Optional: Screenshot-Anhang
-- [ ] Absenden speichert Feedback (Mail oder gleiche Log-Struktur wie Tracking)
+- [x] Floating Action Button (❓, unten rechts, Akzentfarbe)
+- [x] Modal mit Freitext, Kategorie (Bug/Idee/Sonstiges), optionalem Screenshot-Anhang
+- [x] Absenden speichert Feedback in `storage/app/data/feedback.yaml`; Screenshot landet auf dem privaten Storage-Disk (nicht öffentlich verlinkt)
 
 ## 7. Admin-Bereich
-- [ ] Passwortgeschützter Admin-Bereich (Login, Session-basiert)
-- [ ] Passwort als Hash in `.env` speichern (nicht im Code/DB im Klartext):
-  - `ADMIN_PASSWORD_HASH` in Forge über Environment-Tab eintragen
-  - Hash generieren mit `Hash::make('passwort')` (Laravel Tinker)
-  - Login-Check mit `Hash::check($request->password, config(...))`
-  - `.env` in `.gitignore` verifizieren (Laravel-Standard, aber gegenchecken)
-- [ ] Übersichtliche Liste des User-Logs (Zeitpunkt, Aktionen, ggf. gefiltert/sortierbar)
-- [ ] Übersicht aller eingegangenen Feedback-Einträge (Datum, Kategorie, Text, ggf. Screenshot)
+- [x] Passwortgeschützter Admin-Bereich unter `/admin` (Session-basiert, kein User-Table nötig)
+- [x] Passwort als Hash in `.env` (`ADMIN_PASSWORD_HASH`), `Hash::check` beim Login — siehe Deploy-Hinweise unten
+- [x] Übersichtliche Liste des Logs (`/admin`, neueste zuerst, letzte 300 Einträge)
+- [x] Übersicht aller Feedback-Einträge inkl. Screenshot-Link (nur eingeloggt einsehbar)
+
+## Deploy-Hinweise für Forge (wichtig, einmalig)
+Die App ist jetzt eine echte Laravel-Anwendung, kein statisches HTML mehr. In Forge muss dafür einmalig eingerichtet werden:
+- **Deploy-Script** um `composer install --no-dev` und `php artisan migrate --force` ergänzen (Standard-Laravel-Deploy-Script in Forge macht das meist schon automatisch)
+- **`.env` auf dem Server** anlegen (Forge → Environment-Tab), Werte wie lokal in `.env.example`, plus:
+  - `APP_KEY` generieren (`php artisan key:generate` einmalig auf dem Server, oder Wert aus lokaler `.env` übernehmen)
+  - `ADMIN_PASSWORD_HASH` setzen — Hash lokal erzeugen mit:
+    `php artisan tinker --execute="echo Hash::make('deinpasswort');"`
+- **Storage-Verzeichnis beschreibbar machen**: `storage/` und `bootstrap/cache/` brauchen Schreibrechte für den Webserver-User (Forge macht das i. d. R. automatisch beim Deploy)
+- Webroot in Forge bleibt `public/` (Standard-Laravel-Konvention, unverändert)
 
 
 ## 8
