@@ -386,6 +386,13 @@
     animation:ponyTrot 2.6s ease-in-out infinite;
   }
   .feedback-fab:hover{ animation-duration:.7s; }
+  /* mobile portrait: move it up top so it doesn't crowd the dock down below */
+  @media (orientation:portrait) and (max-width:700px){
+    .feedback-fab{
+      top:calc(14px + env(safe-area-inset-top));
+      bottom:auto;
+    }
+  }
   .feedback-fab img{
     width:100%;
     height:100%;
