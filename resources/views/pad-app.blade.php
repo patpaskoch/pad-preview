@@ -365,29 +365,29 @@
   }
   .feedback-fab{
     position:fixed;
-    right:16px;
-    bottom:calc(16px + env(safe-area-inset-bottom));
+    right:14px;
+    bottom:calc(14px + env(safe-area-inset-bottom));
     z-index:60;
-    width:48px; height:48px;
+    width:64px; height:64px;
     border-radius:50%;
-    background:rgba(201,138,61,.9);
-    border:none;
+    background:radial-gradient(circle, #1d2126, #0e1013);
+    border:1px solid rgba(255,255,255,.15);
     cursor:pointer;
-    box-shadow:0 6px 20px rgba(0,0,0,.4);
+    box-shadow:0 6px 20px rgba(0,0,0,.5);
     display:flex;
     align-items:center;
     justify-content:center;
+    overflow:hidden;
+    padding:0;
     animation:ponyTrot 2.6s ease-in-out infinite;
   }
   .feedback-fab:hover{ animation-duration:.7s; }
-  .pony-icon{
-    display:grid;
-    grid-template-columns:repeat(10, 1fr);
-    grid-template-rows:repeat(10, 1fr);
-    width:26px; height:26px;
+  .feedback-fab img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    transform:scale(1.6);
   }
-  .pony-icon i{ display:block; }
-  .pony-icon i.on{ background:#181008; }
   .feedback-modal .modal{ max-width:420px; }
   .feedback-modal textarea{
     width:100%;
@@ -484,7 +484,7 @@
 </div>
 
 <button class="feedback-fab" id="feedbackFab" title="Send feedback">
-  <div class="pony-icon" id="ponyIcon"></div>
+  <img src="{{ asset('img/pony-express.png') }}" alt="Send feedback">
 </button>
 
 <div class="modal-backdrop feedback-modal" id="feedbackModal" style="display:none;">
@@ -535,30 +535,6 @@ function sendSessionEnd(){
   }
 }
 document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') sendSessionEnd(); });
-
-// tiny hand-pixelled pony head for the feedback button
-const PONY_PIXELS = [
-  '0001110000',
-  '0011111000',
-  '0111111100',
-  '1111011110',
-  '1100011111',
-  '1000001111',
-  '0100001111',
-  '0110000110',
-  '0011000110',
-  '0001111100',
-];
-(function renderPonyIcon(){
-  const el = document.getElementById('ponyIcon');
-  PONY_PIXELS.forEach(row => {
-    [...row].forEach(bit => {
-      const i = document.createElement('i');
-      if(bit === '1') i.className = 'on';
-      el.appendChild(i);
-    });
-  });
-})();
 
 const placeholder = document.getElementById('placeholder');
 const displayCanvas = document.getElementById('displayCanvas');
