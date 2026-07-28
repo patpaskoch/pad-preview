@@ -167,6 +167,19 @@
   .float-controls input[type=range]{ width:90px; }
   .float-controls .opacity-group{ display:none; align-items:center; gap:8px; flex-shrink:0; }
   .float-controls .opacity-group.show{ display:flex; }
+  .preset-strip{ display:none; align-items:center; gap:6px; flex-shrink:0; }
+  .preset-strip.show{ display:flex; }
+  .preset-strip .swatch{
+    width:34px; height:34px;
+    border-radius:8px;
+    background-size:cover;
+    background-position:center;
+    border:2px solid rgba(255,255,255,.15);
+    cursor:pointer;
+    flex-shrink:0;
+    padding:0;
+  }
+  .preset-strip .swatch.active{ border-color:var(--accent); }
   .float-controls button{
     display:flex;
     flex-direction:column;
@@ -266,6 +279,74 @@
     color:#181008;
     font-weight:600;
   }
+
+  /* before/after compare */
+  .compare-backdrop{
+    position:fixed;
+    inset:0;
+    background:#000;
+    z-index:200;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:16px;
+    padding:20px;
+  }
+  .compare-wrap{
+    position:relative;
+    max-width:100%;
+    max-height:calc(100% - 60px);
+    line-height:0;
+    touch-action:none;
+    cursor:ew-resize;
+    border-radius:10px;
+    overflow:hidden;
+    box-shadow:0 10px 40px rgba(0,0,0,.5);
+  }
+  .compare-img{
+    display:block;
+    max-width:100%;
+    max-height:calc(100vh - 100px);
+    -webkit-user-select:none;
+    user-select:none;
+    pointer-events:none;
+  }
+  .compare-before{
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:100%;
+    clip-path:inset(0 50% 0 0);
+  }
+  .compare-handle{
+    position:absolute;
+    top:0; bottom:0;
+    left:50%;
+    width:3px;
+    background:var(--accent);
+    transform:translateX(-50%);
+    pointer-events:none;
+  }
+  .compare-handle::before{
+    content:'';
+    position:absolute;
+    top:50%; left:50%;
+    width:34px; height:34px;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 4px 14px rgba(0,0,0,.4);
+  }
+  .compare-close{
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.15);
+    color:var(--text);
+    padding:9px 16px;
+    border-radius:10px;
+    font-size:.85rem;
+    cursor:pointer;
+  }
 </style>
 </head>
 <body>
@@ -286,6 +367,11 @@
         <input type="range" id="opacitySlider" min="30" max="100" value="100">
         <span id="opacityVal">100%</span>
       </div>
+      <div class="opacity-group" id="tintGroup">
+        <span>Tint</span>
+        <input type="range" id="tintSlider" min="-180" max="180" value="0">
+      </div>
+      <div class="preset-strip" id="presetStrip"></div>
     </div>
     <button class="done" id="doneEditing"><span class="icon">✓</span>Done</button>
   </div>
@@ -293,6 +379,7 @@
   <nav class="navbar">
     <button id="navHorse"><span class="icon">🐴</span>Horse</button>
     <button id="navPad"><span class="icon">🟪</span>Pad</button>
+    <button id="navCompare" disabled><span class="icon">🔀</span>Compare</button>
     <button id="navSave" disabled><span class="icon">💾</span>Save</button>
   </nav>
 </div>
@@ -301,6 +388,15 @@
 
 <input type="file" id="horseFileInput" accept="image/*">
 <input type="file" id="padFileInput" accept="image/*">
+
+<div class="compare-backdrop" id="compareBackdrop" style="display:none;">
+  <div class="compare-wrap" id="compareWrap">
+    <img class="compare-img" id="compareAfterImg" alt="With pad">
+    <img class="compare-img compare-before" id="compareBeforeImg" alt="Without pad">
+    <div class="compare-handle" id="compareHandle"></div>
+  </div>
+  <button class="compare-close" id="compareClose">✕ Close</button>
+</div>
 
 <div class="modal-backdrop" id="cropModal" style="display:none;">
   <div class="modal">
@@ -322,6 +418,7 @@ const displayCtx = displayCanvas.getContext('2d');
 
 const navHorse = document.getElementById('navHorse');
 const navPad = document.getElementById('navPad');
+const navCompare = document.getElementById('navCompare');
 const navSave = document.getElementById('navSave');
 const dock = document.getElementById('dock');
 const dockToggle = document.getElementById('dockToggle');
@@ -369,6 +466,8 @@ let padRawImg = null;     // original uploaded pad photo (for re-crop)
 // x/y = center, w/h = drawn size, rot = radians. img is a drawable (Image or canvas).
 let objects = { horse: null, pad: null };
 let padOpacity = 1.0;
+let padHue = 0; // -180..180, CSS hue-rotate degrees applied to the pad layer
+let padHistory = []; // [{img, thumb}] recently used pad photos, newest first
 
 let editTarget = null; // null | 'horse' | 'pad'
 let dragMode = null;   // 'move' | 'resize' | 'rotate'
@@ -411,6 +510,41 @@ navSave.addEventListener('click', () => {
   render();
 });
 
+// ---- before/after compare ----
+const compareBackdrop = document.getElementById('compareBackdrop');
+const compareWrap = document.getElementById('compareWrap');
+const compareBeforeImg = document.getElementById('compareBeforeImg');
+const compareAfterImg = document.getElementById('compareAfterImg');
+const compareHandle = document.getElementById('compareHandle');
+let compareDragging = false;
+
+navCompare.addEventListener('click', () => {
+  if(!objects.horse || !objects.pad) return;
+  compareAfterImg.src = renderLayerToDataURL(true);
+  compareBeforeImg.src = renderLayerToDataURL(false);
+  setCompareReveal(50);
+  compareBackdrop.style.display = 'flex';
+});
+document.getElementById('compareClose').addEventListener('click', () => {
+  compareBackdrop.style.display = 'none';
+});
+
+function setCompareReveal(pct){
+  pct = Math.max(0, Math.min(100, pct));
+  compareBeforeImg.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+  compareHandle.style.left = pct + '%';
+}
+function compareRevealFromClientX(clientX){
+  const rect = compareWrap.getBoundingClientRect();
+  setCompareReveal(((clientX - rect.left) / rect.width) * 100);
+}
+compareWrap.addEventListener('mousedown', e => { compareDragging = true; compareRevealFromClientX(e.clientX); });
+window.addEventListener('mousemove', e => { if(compareDragging) compareRevealFromClientX(e.clientX); });
+window.addEventListener('mouseup', () => { compareDragging = false; });
+compareWrap.addEventListener('touchstart', e => { compareDragging = true; compareRevealFromClientX(e.touches[0].clientX); }, {passive:true});
+compareWrap.addEventListener('touchmove', e => { if(compareDragging) compareRevealFromClientX(e.touches[0].clientX); }, {passive:true});
+compareWrap.addEventListener('touchend', () => { compareDragging = false; });
+
 horseFileInput.addEventListener('change', e => {
   if(!e.target.files[0]) return;
   readAsImage(e.target.files[0], img => {
@@ -445,8 +579,31 @@ document.getElementById('cropAgain').addEventListener('click', () => {
   const title = editTarget === 'horse' ? 'Crop horse photo' : 'Crop pad photo';
   openCropModal(raw, editTarget, title);
 });
-document.getElementById('resetActive').addEventListener('click', () => {
+// tap once to arm, tap again within a couple seconds to actually reset —
+// guards against accidental taps without an intrusive native confirm() dialog
+const resetBtn = document.getElementById('resetActive');
+let resetArmed = false;
+let resetArmTimer = null;
+
+function disarmReset(){
+  resetArmed = false;
+  resetBtn.classList.remove('done');
+  resetBtn.innerHTML = '<span class="icon">↺</span>Reset';
+  clearTimeout(resetArmTimer);
+}
+
+resetBtn.addEventListener('click', () => {
   if(!editTarget || !objects[editTarget]) return;
+
+  if(!resetArmed){
+    resetArmed = true;
+    resetBtn.classList.add('done');
+    resetBtn.innerHTML = '<span class="icon">⚠️</span>Tap again';
+    resetArmTimer = setTimeout(disarmReset, 2500);
+    return;
+  }
+
+  disarmReset();
   const obj = objects[editTarget];
   if(editTarget === 'horse'){
     obj.x = frameContentW/2; obj.y = frameContentH/2;
@@ -464,13 +621,21 @@ opacitySlider.addEventListener('input', e => {
   opacityVal.textContent = e.target.value + '%';
   render();
 });
+document.getElementById('tintSlider').addEventListener('input', e => {
+  padHue = parseInt(e.target.value);
+  render();
+});
 
 function updateUI(){
   navHorse.classList.toggle('active', editTarget === 'horse');
   navPad.classList.toggle('active', editTarget === 'pad');
   navSave.disabled = !objects.horse;
+  navCompare.disabled = !(objects.horse && objects.pad);
   floatControls.classList.toggle('show', !!editTarget);
   opacityGroup.classList.toggle('show', editTarget === 'pad');
+  document.getElementById('tintGroup').classList.toggle('show', editTarget === 'pad');
+  renderPresetStrip();
+  disarmReset();
   applyCanvasMode();
   render();
   syncStagePadding();
@@ -602,20 +767,58 @@ function move(e){
 }
 function end(){ dragMode = null; dragStart = null; }
 
+// two-finger pinch: scale + rotate the active object together, like a
+// standard photo editor gesture. takes over from single-finger dragging
+// the moment a second finger touches down.
+function touchDist(t1, t2){ return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY); }
+function touchAngle(t1, t2){ return Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX); }
+
+function touchStart(e){
+  if(e.touches.length >= 2 && editTarget && objects[editTarget]){
+    e.preventDefault();
+    const obj = objects[editTarget];
+    const [t1, t2] = e.touches;
+    dragMode = 'pinch';
+    dragStart = { d0: touchDist(t1, t2), a0: touchAngle(t1, t2), w0: obj.w, h0: obj.h, rot0: obj.rot };
+    return;
+  }
+  start(e);
+}
+function touchMove(e){
+  if(dragMode === 'pinch' && e.touches.length >= 2 && editTarget){
+    e.preventDefault();
+    const obj = objects[editTarget];
+    if(!obj) return;
+    const [t1, t2] = e.touches;
+    const scale = Math.max(0.15, touchDist(t1, t2) / dragStart.d0);
+    obj.w = dragStart.w0 * scale;
+    obj.h = dragStart.h0 * scale;
+    obj.rot = dragStart.rot0 + (touchAngle(t1, t2) - dragStart.a0);
+    render();
+    return;
+  }
+  move(e);
+}
+function touchEnd(e){
+  if(e.touches.length < 2){ dragMode = null; dragStart = null; }
+  end(e);
+}
+
 displayCanvas.addEventListener('mousedown', start);
 displayCanvas.addEventListener('mousemove', move);
 window.addEventListener('mouseup', end);
-displayCanvas.addEventListener('touchstart', start, {passive:false});
-displayCanvas.addEventListener('touchmove', move, {passive:false});
-displayCanvas.addEventListener('touchend', end);
+displayCanvas.addEventListener('touchstart', touchStart, {passive:false});
+displayCanvas.addEventListener('touchmove', touchMove, {passive:false});
+displayCanvas.addEventListener('touchend', touchEnd);
 
-function drawObj(obj, alpha){
-  displayCtx.save();
-  displayCtx.translate(obj.x, obj.y);
-  displayCtx.rotate(obj.rot);
-  displayCtx.globalAlpha = alpha;
-  displayCtx.drawImage(obj.img, -obj.w/2, -obj.h/2, obj.w, obj.h);
-  displayCtx.restore();
+function drawObj(ctx, obj, alpha, filter){
+  ctx.save();
+  ctx.translate(obj.x, obj.y);
+  ctx.rotate(obj.rot);
+  ctx.globalAlpha = alpha;
+  if(filter) ctx.filter = filter;
+  ctx.drawImage(obj.img, -obj.w/2, -obj.h/2, obj.w, obj.h);
+  ctx.restore();
 }
 
 function render(showHandles = true){
@@ -627,11 +830,26 @@ function render(showHandles = true){
   displayCtx.save();
   displayCtx.translate(canvasOffset, canvasOffset);
 
-  drawObj(objects.horse, 1);
-  if(objects.pad) drawObj(objects.pad, padOpacity);
+  drawObj(displayCtx, objects.horse, 1);
+  if(objects.pad) drawObj(displayCtx, objects.pad, padOpacity, padHue ? `hue-rotate(${padHue}deg)` : null);
 
   if(showHandles && editTarget && objects[editTarget]) drawHandles(objects[editTarget]);
   displayCtx.restore();
+}
+
+// renders horse (+ optionally pad) at full content resolution, no margin/handles —
+// used for the before/after compare view
+function renderLayerToDataURL(includePad){
+  const c = document.createElement('canvas');
+  c.width = frameContentW; c.height = frameContentH;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0e1013';
+  ctx.fillRect(0, 0, c.width, c.height);
+  drawObj(ctx, objects.horse, 1);
+  if(includePad && objects.pad){
+    drawObj(ctx, objects.pad, padOpacity, padHue ? `hue-rotate(${padHue}deg)` : null);
+  }
+  return c.toDataURL('image/png');
 }
 
 function drawHandles(obj){
@@ -828,10 +1046,43 @@ function applyCropResult(out){
       const h = w * (out.height / out.width);
       objects.pad = { img: out, x: frameContentW/2, y: frameContentH/2, w, h, rot: 0 };
     }
+    addToPadHistory(out);
     editTarget = 'pad';
     updateUI();
   }
   closeCropModal();
+}
+
+// ---- pad presets: remember recently used pad photos so they can be
+// re-applied instantly (e.g. to compare colorways) without re-uploading ----
+const PAD_HISTORY_MAX = 8;
+
+function addToPadHistory(img){
+  padHistory = padHistory.filter(entry => entry.img !== img);
+  padHistory.unshift({ img, thumb: img.toDataURL ? img.toDataURL('image/png') : img.src });
+  if(padHistory.length > PAD_HISTORY_MAX) padHistory.length = PAD_HISTORY_MAX;
+}
+
+function renderPresetStrip(){
+  const strip = document.getElementById('presetStrip');
+  strip.classList.toggle('show', editTarget === 'pad' && padHistory.length > 1);
+  strip.innerHTML = '';
+  if(editTarget !== 'pad') return;
+
+  padHistory.forEach(entry => {
+    const btn = document.createElement('button');
+    btn.className = 'swatch';
+    btn.style.backgroundImage = `url(${entry.thumb})`;
+    if(objects.pad && objects.pad.img === entry.img) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+      if(!objects.pad) return;
+      objects.pad.img = entry.img;
+      objects.pad.h = objects.pad.w * (entry.img.height / entry.img.width);
+      renderPresetStrip();
+      render();
+    });
+    strip.appendChild(btn);
+  });
 }
 
 document.getElementById('cropApply').addEventListener('click', () => {
