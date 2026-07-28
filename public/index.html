@@ -400,11 +400,14 @@ navPad.addEventListener('click', () => {
 });
 navSave.addEventListener('click', () => {
   if(!objects.horse) return;
+  const wasPadded = canvasOffset > 0;
+  if(wasPadded){ canvasOffset = 0; displayCanvas.width = frameContentW; displayCanvas.height = frameContentH; }
   render(false);
   const link = document.createElement('a');
   link.download = 'pad-preview.png';
   link.href = displayCanvas.toDataURL('image/png');
   link.click();
+  if(wasPadded) applyCanvasMode();
   render();
 });
 
@@ -446,12 +449,12 @@ document.getElementById('resetActive').addEventListener('click', () => {
   if(!editTarget || !objects[editTarget]) return;
   const obj = objects[editTarget];
   if(editTarget === 'horse'){
-    obj.x = displayCanvas.width/2; obj.y = displayCanvas.height/2;
-    obj.w = displayCanvas.width; obj.h = displayCanvas.height; obj.rot = 0;
+    obj.x = frameContentW/2; obj.y = frameContentH/2;
+    obj.w = frameContentW; obj.h = frameContentH; obj.rot = 0;
   } else {
     const w = frameContentW * 0.4;
     const h = w * (obj.img.height / obj.img.width);
-    obj.x = displayCanvas.width/2; obj.y = displayCanvas.height/2;
+    obj.x = frameContentW/2; obj.y = frameContentH/2;
     obj.w = w; obj.h = h; obj.rot = 0;
   }
   render();
@@ -468,21 +471,34 @@ function updateUI(){
   navSave.disabled = !objects.horse;
   floatControls.classList.toggle('show', !!editTarget);
   opacityGroup.classList.toggle('show', editTarget === 'pad');
+  applyCanvasMode();
   render();
   syncStagePadding();
 }
 
 // ---- horse defines the working frame size ----
-// the canvas is padded beyond the photo's own size so the rotate/resize
-// handles always have room to render without getting clipped at the edge.
-// the padding is filled with the same color as the page background, so it
-// stays invisible while not editing.
+// object x/y/w/h always live in "content space" (0..frameContentW/H), i.e.
+// the horse photo's own pixel size with zero padding. the canvas itself
+// only grows a temporary margin around that content — filled with the page
+// background color, so it's invisible — while the horse layer specifically
+// is being edited, so its rotate/resize handles have room to render without
+// getting clipped at the edge. any other time (including the final result)
+// the canvas matches the content exactly: zero padding.
 const FRAME_MARGIN = 64;
-let frameContentW = 0, frameContentH = 0; // the horse photo's own fill size, excludes margin
+let frameContentW = 0, frameContentH = 0;
+let canvasOffset = 0; // current margin (0 or FRAME_MARGIN), applied when drawing/hit-testing
+
+function applyCanvasMode(){
+  if(!objects.horse) return;
+  const padded = editTarget === 'horse';
+  canvasOffset = padded ? FRAME_MARGIN : 0;
+  displayCanvas.width = frameContentW + canvasOffset * 2;
+  displayCanvas.height = frameContentH + canvasOffset * 2;
+}
 
 function setupFrame(img){
-  const oldW = displayCanvas.width || null;
-  const oldH = displayCanvas.height || null;
+  const oldContentW = frameContentW || null;
+  const oldContentH = frameContentH || null;
 
   // size the working resolution to the actual screen (times pixel ratio, for
   // retina sharpness) instead of a fixed cap, so the photo can fill however
@@ -496,16 +512,10 @@ function setupFrame(img){
   frameContentW = Math.round(img.width * scale);
   frameContentH = Math.round(img.height * scale);
 
-  const w = frameContentW + FRAME_MARGIN * 2;
-  const h = frameContentH + FRAME_MARGIN * 2;
+  objects.horse = { img, x: frameContentW/2, y: frameContentH/2, w: frameContentW, h: frameContentH, rot: 0 };
 
-  displayCanvas.width = w;
-  displayCanvas.height = h;
-
-  objects.horse = { img, x: w/2, y: h/2, w: frameContentW, h: frameContentH, rot: 0 };
-
-  if(objects.pad && oldW && oldH){
-    const sx = w / oldW, sy = h / oldH;
+  if(objects.pad && oldContentW && oldContentH){
+    const sx = frameContentW / oldContentW, sy = frameContentH / oldContentH;
     objects.pad.x *= sx; objects.pad.y *= sy;
     objects.pad.w *= sx; objects.pad.h *= sy;
   }
@@ -522,7 +532,7 @@ function getPos(e){
   const scaleY = displayCanvas.height / rect.height;
   const clientX = e.touches ? e.touches[0].clientX : e.clientX;
   const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+  return { x: (clientX - rect.left) * scaleX - canvasOffset, y: (clientY - rect.top) * scaleY - canvasOffset };
 }
 
 // convert a world (canvas) point into an object's local, unrotated space
@@ -614,10 +624,14 @@ function render(showHandles = true){
   displayCtx.fillStyle = '#0e1013';
   displayCtx.fillRect(0, 0, displayCanvas.width, displayCanvas.height);
 
+  displayCtx.save();
+  displayCtx.translate(canvasOffset, canvasOffset);
+
   drawObj(objects.horse, 1);
   if(objects.pad) drawObj(objects.pad, padOpacity);
 
   if(showHandles && editTarget && objects[editTarget]) drawHandles(objects[editTarget]);
+  displayCtx.restore();
 }
 
 function drawHandles(obj){
@@ -812,7 +826,7 @@ function applyCropResult(out){
     } else if(objects.horse){
       const w = frameContentW * 0.4;
       const h = w * (out.height / out.width);
-      objects.pad = { img: out, x: displayCanvas.width/2, y: displayCanvas.height/2, w, h, rot: 0 };
+      objects.pad = { img: out, x: frameContentW/2, y: frameContentH/2, w, h, rot: 0 };
     }
     editTarget = 'pad';
     updateUI();
