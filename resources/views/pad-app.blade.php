@@ -57,8 +57,16 @@
     line-height:1.6;
     text-align:center;
     padding:0 30px;
+    max-width:360px;
   }
   .placeholder b{ color:var(--text); }
+  .placeholder .welcome-title{
+    display:block;
+    color:var(--text);
+    font-size:1.3rem;
+    font-weight:700;
+    margin-bottom:8px;
+  }
 
   /* dock: wraps the navbar + float-controls as a single fixed-positioned,
      collapsible unit. children lay out normally (flex column) inside it,
@@ -431,7 +439,11 @@
 <body>
 
 <div id="stage">
-  <div class="placeholder" id="placeholder">Tap <b>Horse</b> below to upload a photo.</div>
+  <div class="placeholder" id="placeholder">
+    <span class="welcome-title">🤠 Howdy, partner!</span>
+    Happy you're here &mdash; let's create something stunning.<br><br>
+    Tap <b>Horse</b> below to upload your horse photo, then <b>Pad</b> to add the saddle blanket.
+  </div>
   <canvas id="displayCanvas" style="display:none;"></canvas>
 </div>
 
