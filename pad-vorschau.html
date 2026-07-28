@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0">
+<meta name="theme-color" content="#0e1013">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Pad Preview</title>
+<style>
+  :root{
+    --bg: #0e1013;
+    --panel: #16191d;
+    --panel-2: #1d2126;
+    --line: #2a2f36;
+    --text: #e8e6e0;
+    --muted: #8b9099;
+    --accent: #c98a3d;
+  }
+  *{box-sizing:border-box;}
+  html, body{
+    height:100%;
+    margin:0;
+    overscroll-behavior:none;
+  }
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+
+  #stage{
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+  }
+  #displayCanvas{
+    max-width:100%;
+    max-height:100%;
+    display:block;
+    touch-action:none;
+    border-radius:10px;
+    box-shadow:0 10px 40px rgba(0,0,0,.5);
+  }
+  .placeholder{
+    color:var(--muted);
+    font-size:.95rem;
+    line-height:1.6;
+    text-align:center;
+    padding:0 30px;
+  }
+  .placeholder b{ color:var(--text); }
+
+  /* dock: wraps the navbar + float-controls as a single fixed-positioned,
+     collapsible unit. children lay out normally (flex column) inside it,
+     which keeps the "how tall is this thing" math in one place (JS reads
+     dock.offsetHeight instead of guessing per-panel bottom offsets). */
+  #dock{
+    position:fixed;
+    left:50%;
+    bottom:calc(44px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    z-index:50;
+    max-width:calc(100vw - 16px);
+    width:max-content;
+    transition:transform .25s ease, opacity .2s ease;
+  }
+  #dock.collapsed{
+    transform:translateX(-50%) translateY(calc(100% + 30px));
+    opacity:0;
+    pointer-events:none;
+  }
+
+  .dock-toggle{
+    position:fixed;
+    left:50%;
+    bottom:calc(8px + env(safe-area-inset-bottom));
+    transform:translateX(-50%);
+    z-index:60;
+    width:44px;
+    height:26px;
+    border-radius:14px;
+    background:rgba(30,34,40,.6);
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    border:1px solid rgba(255,255,255,.1);
+    color:var(--muted);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:.85rem;
+    line-height:1;
+    cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+  }
+
+  /* floating glass navbar */
+  nav.navbar{
+    display:flex;
+    gap:4px;
+    padding:8px;
+    border-radius:22px;
+    background:rgba(30,34,40,.55);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    border:1px solid rgba(255,255,255,.09);
+    box-shadow:0 10px 30px rgba(0,0,0,.45);
+    max-width:100%;
+  }
+  nav.navbar button{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    background:transparent;
+    border:none;
+    color:var(--muted);
+    padding:9px 18px;
+    border-radius:16px;
+    font-size:.66rem;
+    font-family:inherit;
+    cursor:pointer;
+    transition:background .15s, color .15s;
+    flex-shrink:0;
+  }
+  nav.navbar button .icon{ font-size:1.25rem; line-height:1; }
+  nav.navbar button.active{
+    background:rgba(201,138,61,.22);
+    color:var(--accent);
+  }
+  nav.navbar button:disabled{ opacity:.35; }
+
+  /* floating controls above navbar, shown while editing horse or pad */
+  .float-controls{
+    display:none;
+    align-items:center;
+    gap:10px;
+    padding:9px 10px 9px 16px;
+    border-radius:18px;
+    background:rgba(30,34,40,.55);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    border:1px solid rgba(255,255,255,.09);
+    box-shadow:0 10px 30px rgba(0,0,0,.45);
+    font-size:.75rem;
+    color:var(--muted);
+    max-width:100%;
+  }
+  .float-controls.show{ display:flex; }
+  .float-controls .fc-scroll{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    overflow-x:auto;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .float-controls .fc-scroll::-webkit-scrollbar{ display:none; }
+  .float-controls input[type=range]{ width:90px; }
+  .float-controls .opacity-group{ display:none; align-items:center; gap:8px; flex-shrink:0; }
+  .float-controls .opacity-group.show{ display:flex; }
+  .float-controls button{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:2px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.1);
+    color:var(--text);
+    padding:7px 12px;
+    border-radius:10px;
+    font-size:.62rem;
+    font-family:inherit;
+    cursor:pointer;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .float-controls button .icon{ font-size:1.05rem; line-height:1; }
+  .float-controls button.done{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#181008;
+    font-weight:700;
+    flex-shrink:0;
+  }
+
+  /* short / landscape viewports: tighten everything so the photo keeps most of the screen */
+  @media (orientation:landscape) and (max-height:520px){
+    nav.navbar button{ padding:6px 12px; font-size:.6rem; }
+    nav.navbar button .icon{ font-size:1.05rem; }
+    .float-controls{ padding:6px 8px 6px 12px; }
+    .float-controls button{ padding:5px 9px; }
+  }
+
+  /* wider phones in portrait: let the panel stretch out so more buttons fit in one row */
+  @media (min-width:480px){
+    #dock{ max-width:calc(100vw - 40px); }
+  }
+
+  input[type=file]{ display:none; }
+
+  /* crop modal */
+  .modal-backdrop{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.7);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:100;
+    padding:20px;
+  }
+  .modal{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px;
+    max-width:560px;
+    width:100%;
+    max-height:calc(100vh - 40px);
+    overflow-y:auto;
+  }
+  .modal h3{
+    margin:0 0 4px;
+    font-size:1rem;
+  }
+  .modal p{
+    margin:0 0 12px;
+    color:var(--muted);
+    font-size:.82rem;
+  }
+  .modal canvas{
+    width:100%;
+    height:auto;
+    border-radius:8px;
+    touch-action:none;
+    cursor:move;
+    display:block;
+  }
+  .modal .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:14px;
+  }
+  .modal button{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:9px 16px;
+    border-radius:8px;
+    font-size:.82rem;
+    cursor:pointer;
+  }
+  .modal button.primary{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#181008;
+    font-weight:600;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="placeholder" id="placeholder">Tap <b>Horse</b> below to upload a photo.</div>
+  <canvas id="displayCanvas" style="display:none;"></canvas>
+</div>
+
+<div id="dock">
+  <div class="float-controls" id="floatControls">
+    <div class="fc-scroll">
+      <button id="swapPhoto"><span class="icon">🔄</span>Change photo</button>
+      <button id="cropAgain"><span class="icon">✂️</span>Crop</button>
+      <button id="resetActive"><span class="icon">↺</span>Reset</button>
+      <div class="opacity-group" id="opacityGroup">
+        <span>Opacity</span>
+        <input type="range" id="opacitySlider" min="30" max="100" value="100">
+        <span id="opacityVal">100%</span>
+      </div>
+    </div>
+    <button class="done" id="doneEditing"><span class="icon">✓</span>Done</button>
+  </div>
+
+  <nav class="navbar">
+    <button id="navHorse"><span class="icon">🐴</span>Horse</button>
+    <button id="navPad"><span class="icon">🟪</span>Pad</button>
+    <button id="navSave" disabled><span class="icon">💾</span>Save</button>
+  </nav>
+</div>
+
+<button class="dock-toggle" id="dockToggle" title="Show/hide controls">⌄</button>
+
+<input type="file" id="horseFileInput" accept="image/*">
+<input type="file" id="padFileInput" accept="image/*">
+
+<div class="modal-backdrop" id="cropModal" style="display:none;">
+  <div class="modal">
+    <h3 id="cropTitle">Crop</h3>
+    <p>Drag the corners to adjust, drag the middle to move &mdash; only the frame will be used.</p>
+    <canvas id="cropCanvas"></canvas>
+    <div class="modal-actions">
+      <button id="cropChangePhoto" style="margin-right:auto;">Change photo</button>
+      <button id="cropSkip">Use whole photo</button>
+      <button class="primary" id="cropApply">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const placeholder = document.getElementById('placeholder');
+const displayCanvas = document.getElementById('displayCanvas');
+const displayCtx = displayCanvas.getContext('2d');
+
+const navHorse = document.getElementById('navHorse');
+const navPad = document.getElementById('navPad');
+const navSave = document.getElementById('navSave');
+const dock = document.getElementById('dock');
+const dockToggle = document.getElementById('dockToggle');
+const floatControls = document.getElementById('floatControls');
+const opacityGroup = document.getElementById('opacityGroup');
+const opacitySlider = document.getElementById('opacitySlider');
+const opacityVal = document.getElementById('opacityVal');
+
+// ---- collapsible dock (navbar + float-controls) ----
+// while actively editing (handles + toolbar visible), the stage reserves
+// room below the photo so the dock doesn't sit on top of what you're
+// dragging. once you're done editing (just browsing the result), the photo
+// goes full-bleed and the compact navbar floats on top of it instead.
+let dockCollapsed = false;
+
+dockToggle.addEventListener('click', () => {
+  dockCollapsed = !dockCollapsed;
+  dock.classList.toggle('collapsed', dockCollapsed);
+  dockToggle.textContent = dockCollapsed ? '⌃' : '⌄';
+  syncStagePadding();
+});
+
+function syncStagePadding(){
+  const stageEl = document.getElementById('stage');
+  if(!editTarget || dockCollapsed){
+    stageEl.style.paddingBottom = 'calc(16px + env(safe-area-inset-bottom))';
+    return;
+  }
+  const toggleReserve = 44; // matches #dock's base "bottom" offset in CSS
+  const margin = 16;
+  const reserved = toggleReserve + dock.offsetHeight + margin;
+  stageEl.style.paddingBottom = `calc(${reserved}px + env(safe-area-inset-bottom))`;
+}
+
+window.addEventListener('resize', syncStagePadding);
+window.addEventListener('orientationchange', () => setTimeout(syncStagePadding, 50));
+
+const horseFileInput = document.getElementById('horseFileInput');
+const padFileInput = document.getElementById('padFileInput');
+
+let horseRawImg = null;   // original uploaded horse photo (for re-crop)
+let padRawImg = null;     // original uploaded pad photo (for re-crop)
+
+// both layers share the same shape: { img, x, y, w, h, rot }
+// x/y = center, w/h = drawn size, rot = radians. img is a drawable (Image or canvas).
+let objects = { horse: null, pad: null };
+let padOpacity = 1.0;
+
+let editTarget = null; // null | 'horse' | 'pad'
+let dragMode = null;   // 'move' | 'resize' | 'rotate'
+let dragStart = null;
+
+const HANDLE_R = 14;
+const ROT_OFFSET = 34;
+
+function readAsImage(file, cb){
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => cb(img);
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ---- nav bar ----
+navHorse.addEventListener('click', () => {
+  if(!horseRawImg){ horseFileInput.click(); return; }
+  editTarget = (editTarget === 'horse') ? null : 'horse';
+  updateUI();
+});
+navPad.addEventListener('click', () => {
+  if(!padRawImg){ padFileInput.click(); return; }
+  editTarget = (editTarget === 'pad') ? null : 'pad';
+  updateUI();
+});
+navSave.addEventListener('click', () => {
+  if(!objects.horse) return;
+  render(false);
+  const link = document.createElement('a');
+  link.download = 'pad-preview.png';
+  link.href = displayCanvas.toDataURL('image/png');
+  link.click();
+  render();
+});
+
+horseFileInput.addEventListener('change', e => {
+  if(!e.target.files[0]) return;
+  readAsImage(e.target.files[0], img => {
+    horseRawImg = img;
+    savedCropRect.horse = null;
+    openCropModal(img, 'horse', 'Crop horse photo');
+  });
+  e.target.value = '';
+});
+padFileInput.addEventListener('change', e => {
+  if(!e.target.files[0]) return;
+  readAsImage(e.target.files[0], img => {
+    padRawImg = img;
+    savedCropRect.pad = null;
+    openCropModal(img, 'pad', 'Crop pad photo');
+  });
+  e.target.value = '';
+});
+
+document.getElementById('swapPhoto').addEventListener('click', () => {
+  if(editTarget === 'horse') horseFileInput.click();
+  else if(editTarget === 'pad') padFileInput.click();
+});
+
+document.getElementById('doneEditing').addEventListener('click', () => {
+  editTarget = null;
+  updateUI();
+});
+document.getElementById('cropAgain').addEventListener('click', () => {
+  if(!editTarget) return;
+  const raw = editTarget === 'horse' ? horseRawImg : padRawImg;
+  const title = editTarget === 'horse' ? 'Crop horse photo' : 'Crop pad photo';
+  openCropModal(raw, editTarget, title);
+});
+document.getElementById('resetActive').addEventListener('click', () => {
+  if(!editTarget || !objects[editTarget]) return;
+  const obj = objects[editTarget];
+  if(editTarget === 'horse'){
+    obj.x = displayCanvas.width/2; obj.y = displayCanvas.height/2;
+    obj.w = displayCanvas.width; obj.h = displayCanvas.height; obj.rot = 0;
+  } else {
+    const w = frameContentW * 0.4;
+    const h = w * (obj.img.height / obj.img.width);
+    obj.x = displayCanvas.width/2; obj.y = displayCanvas.height/2;
+    obj.w = w; obj.h = h; obj.rot = 0;
+  }
+  render();
+});
+opacitySlider.addEventListener('input', e => {
+  padOpacity = parseInt(e.target.value) / 100;
+  opacityVal.textContent = e.target.value + '%';
+  render();
+});
+
+function updateUI(){
+  navHorse.classList.toggle('active', editTarget === 'horse');
+  navPad.classList.toggle('active', editTarget === 'pad');
+  navSave.disabled = !objects.horse;
+  floatControls.classList.toggle('show', !!editTarget);
+  opacityGroup.classList.toggle('show', editTarget === 'pad');
+  render();
+  syncStagePadding();
+}
+
+// ---- horse defines the working frame size ----
+// the canvas is padded beyond the photo's own size so the rotate/resize
+// handles always have room to render without getting clipped at the edge.
+// the padding is filled with the same color as the page background, so it
+// stays invisible while not editing.
+const FRAME_MARGIN = 64;
+let frameContentW = 0, frameContentH = 0; // the horse photo's own fill size, excludes margin
+
+function setupFrame(img){
+  const oldW = displayCanvas.width || null;
+  const oldH = displayCanvas.height || null;
+
+  // size the working resolution to the actual screen (times pixel ratio, for
+  // retina sharpness) instead of a fixed cap, so the photo can fill however
+  // much space is available in both landscape and portrait, on phone or
+  // desktop, and never upscale past the source photo's own resolution.
+  // the dock floats on top of the photo, so it doesn't need to be reserved for.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const availW = Math.max(320, window.innerWidth - 32) * dpr;
+  const availH = Math.max(320, window.innerHeight - 32) * dpr;
+  const scale = Math.min(1, availW / img.width, availH / img.height);
+  frameContentW = Math.round(img.width * scale);
+  frameContentH = Math.round(img.height * scale);
+
+  const w = frameContentW + FRAME_MARGIN * 2;
+  const h = frameContentH + FRAME_MARGIN * 2;
+
+  displayCanvas.width = w;
+  displayCanvas.height = h;
+
+  objects.horse = { img, x: w/2, y: h/2, w: frameContentW, h: frameContentH, rot: 0 };
+
+  if(objects.pad && oldW && oldH){
+    const sx = w / oldW, sy = h / oldH;
+    objects.pad.x *= sx; objects.pad.y *= sy;
+    objects.pad.w *= sx; objects.pad.h *= sy;
+  }
+
+  placeholder.style.display = 'none';
+  displayCanvas.style.display = 'block';
+  editTarget = 'horse';
+  updateUI();
+}
+
+function getPos(e){
+  const rect = displayCanvas.getBoundingClientRect();
+  const scaleX = displayCanvas.width / rect.width;
+  const scaleY = displayCanvas.height / rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+}
+
+// convert a world (canvas) point into an object's local, unrotated space
+function toLocal(pt, obj){
+  const dx = pt.x - obj.x, dy = pt.y - obj.y;
+  const cos = Math.cos(-obj.rot), sin = Math.sin(-obj.rot);
+  return { x: dx*cos - dy*sin, y: dx*sin + dy*cos };
+}
+
+function pointInObj(pos, obj){
+  const local = toLocal(pos, obj);
+  return Math.abs(local.x) < obj.w/2 && Math.abs(local.y) < obj.h/2;
+}
+
+function start(e){
+  const pos = getPos(e);
+
+  if(!editTarget){
+    // tapping directly on the pad or horse opens edit mode for it
+    let hit = null;
+    if(objects.pad && pointInObj(pos, objects.pad)) hit = 'pad';
+    else if(objects.horse && pointInObj(pos, objects.horse)) hit = 'horse';
+    if(!hit) return;
+    editTarget = hit;
+    updateUI();
+  }
+
+  const obj = objects[editTarget];
+  if(!obj) return;
+  e.preventDefault();
+  const local = toLocal(pos, obj);
+  const rotHandle = { x: 0, y: -obj.h/2 - ROT_OFFSET };
+  const resizeHandle = { x: obj.w/2, y: obj.h/2 };
+
+  if(Math.hypot(local.x-rotHandle.x, local.y-rotHandle.y) < HANDLE_R){
+    dragMode = 'rotate';
+  } else if(Math.hypot(local.x-resizeHandle.x, local.y-resizeHandle.y) < HANDLE_R){
+    dragMode = 'resize';
+    dragStart = { w0: obj.w, h0: obj.h, r0: Math.hypot(obj.w/2, obj.h/2) };
+  } else if(Math.abs(local.x) < obj.w/2 && Math.abs(local.y) < obj.h/2){
+    dragMode = 'move';
+    dragStart = { offX: pos.x - obj.x, offY: pos.y - obj.y };
+  } else {
+    dragMode = null;
+  }
+}
+function move(e){
+  if(!dragMode || !editTarget) return;
+  const obj = objects[editTarget];
+  if(!obj) return;
+  e.preventDefault();
+  const pos = getPos(e);
+
+  if(dragMode === 'move'){
+    obj.x = pos.x - dragStart.offX;
+    obj.y = pos.y - dragStart.offY;
+  } else if(dragMode === 'resize'){
+    const local = toLocal(pos, obj);
+    const r = Math.hypot(local.x, local.y);
+    const scale = Math.max(0.15, r / dragStart.r0);
+    obj.w = dragStart.w0 * scale;
+    obj.h = dragStart.h0 * scale;
+  } else if(dragMode === 'rotate'){
+    obj.rot = Math.atan2(pos.y - obj.y, pos.x - obj.x) + Math.PI/2;
+  }
+  render();
+}
+function end(){ dragMode = null; dragStart = null; }
+
+displayCanvas.addEventListener('mousedown', start);
+displayCanvas.addEventListener('mousemove', move);
+window.addEventListener('mouseup', end);
+displayCanvas.addEventListener('touchstart', start, {passive:false});
+displayCanvas.addEventListener('touchmove', move, {passive:false});
+displayCanvas.addEventListener('touchend', end);
+
+function drawObj(obj, alpha){
+  displayCtx.save();
+  displayCtx.translate(obj.x, obj.y);
+  displayCtx.rotate(obj.rot);
+  displayCtx.globalAlpha = alpha;
+  displayCtx.drawImage(obj.img, -obj.w/2, -obj.h/2, obj.w, obj.h);
+  displayCtx.restore();
+}
+
+function render(showHandles = true){
+  if(!objects.horse) return;
+  displayCtx.clearRect(0, 0, displayCanvas.width, displayCanvas.height);
+  displayCtx.fillStyle = '#0e1013';
+  displayCtx.fillRect(0, 0, displayCanvas.width, displayCanvas.height);
+
+  drawObj(objects.horse, 1);
+  if(objects.pad) drawObj(objects.pad, padOpacity);
+
+  if(showHandles && editTarget && objects[editTarget]) drawHandles(objects[editTarget]);
+}
+
+function drawHandles(obj){
+  displayCtx.save();
+  displayCtx.translate(obj.x, obj.y);
+  displayCtx.rotate(obj.rot);
+  displayCtx.globalAlpha = 1;
+
+  displayCtx.strokeStyle = 'rgba(201,138,61,0.9)';
+  displayCtx.lineWidth = 2;
+  displayCtx.setLineDash([6,4]);
+  displayCtx.strokeRect(-obj.w/2, -obj.h/2, obj.w, obj.h);
+  displayCtx.setLineDash([]);
+
+  const rx = 0, ry = -obj.h/2 - ROT_OFFSET;
+  displayCtx.beginPath();
+  displayCtx.moveTo(0, -obj.h/2);
+  displayCtx.lineTo(rx, ry);
+  displayCtx.stroke();
+  drawHandleDot(rx, ry);
+
+  drawHandleDot(obj.w/2, obj.h/2);
+
+  displayCtx.restore();
+}
+
+function drawHandleDot(x, y){
+  displayCtx.beginPath();
+  displayCtx.arc(x, y, 8, 0, Math.PI*2);
+  displayCtx.fillStyle = '#c98a3d';
+  displayCtx.strokeStyle = '#181008';
+  displayCtx.lineWidth = 1.5;
+  displayCtx.fill();
+  displayCtx.stroke();
+}
+
+// ---- crop modal (shared by horse and pad) ----
+const cropModal = document.getElementById('cropModal');
+const cropTitleEl = document.getElementById('cropTitle');
+const cropCanvas = document.getElementById('cropCanvas');
+const cropCtx = cropCanvas.getContext('2d');
+let cropImg = null;
+let cropTarget = null; // 'horse' | 'pad'
+let cropRect = null;   // {x1,y1,x2,y2} in cropCanvas pixel space
+let savedCropRect = { horse: null, pad: null };
+let cropDragMode = null;
+let cropDragStart = null;
+const CROP_HANDLE_R = 16;
+const CROP_MIN = 24;
+
+function openCropModal(img, target, title){
+  cropImg = img;
+  cropTarget = target;
+  cropTitleEl.textContent = title;
+
+  const maxW = 520;
+  // also cap by available viewport height, so the modal (title + text + canvas
+  // + buttons) never grows taller than the screen on short/landscape phones
+  const maxH = Math.max(200, window.innerHeight - 220);
+  const scale = Math.min(1, maxW / img.width, maxH / img.height);
+  cropCanvas.width = Math.round(img.width * scale);
+  cropCanvas.height = Math.round(img.height * scale);
+
+  if(savedCropRect[target]){
+    cropRect = { ...savedCropRect[target] };
+  } else {
+    const insetX = cropCanvas.width * 0.08;
+    const insetY = cropCanvas.height * 0.08;
+    cropRect = { x1: insetX, y1: insetY, x2: cropCanvas.width - insetX, y2: cropCanvas.height - insetY };
+  }
+
+  cropModal.style.display = 'flex';
+  renderCrop();
+}
+
+function renderCrop(){
+  const cw = cropCanvas.width, ch = cropCanvas.height;
+  cropCtx.clearRect(0,0,cw,ch);
+  cropCtx.drawImage(cropImg, 0, 0, cw, ch);
+
+  cropCtx.save();
+  cropCtx.fillStyle = 'rgba(0,0,0,0.6)';
+  cropCtx.fillRect(0, 0, cw, cropRect.y1);
+  cropCtx.fillRect(0, cropRect.y2, cw, ch - cropRect.y2);
+  cropCtx.fillRect(0, cropRect.y1, cropRect.x1, cropRect.y2 - cropRect.y1);
+  cropCtx.fillRect(cropRect.x2, cropRect.y1, cw - cropRect.x2, cropRect.y2 - cropRect.y1);
+  cropCtx.restore();
+
+  cropCtx.strokeStyle = '#c98a3d';
+  cropCtx.lineWidth = 2;
+  cropCtx.strokeRect(cropRect.x1, cropRect.y1, cropRect.x2 - cropRect.x1, cropRect.y2 - cropRect.y1);
+
+  [[cropRect.x1,cropRect.y1],[cropRect.x2,cropRect.y1],[cropRect.x1,cropRect.y2],[cropRect.x2,cropRect.y2]]
+    .forEach(([x,y]) => {
+      cropCtx.beginPath();
+      cropCtx.arc(x, y, 7, 0, Math.PI*2);
+      cropCtx.fillStyle = '#c98a3d';
+      cropCtx.strokeStyle = '#181008';
+      cropCtx.lineWidth = 1.5;
+      cropCtx.fill();
+      cropCtx.stroke();
+    });
+}
+
+function getCropPos(e){
+  const rect = cropCanvas.getBoundingClientRect();
+  const scaleX = cropCanvas.width / rect.width;
+  const scaleY = cropCanvas.height / rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+}
+
+cropCanvas.addEventListener('mousedown', cropStart);
+cropCanvas.addEventListener('mousemove', cropMove);
+window.addEventListener('mouseup', cropEnd);
+cropCanvas.addEventListener('touchstart', cropStart, {passive:false});
+cropCanvas.addEventListener('touchmove', cropMove, {passive:false});
+cropCanvas.addEventListener('touchend', cropEnd);
+
+function cropStart(e){
+  if(!cropRect) return;
+  e.preventDefault();
+  const pos = getCropPos(e);
+  const corners = {
+    tl: {x: cropRect.x1, y: cropRect.y1},
+    tr: {x: cropRect.x2, y: cropRect.y1},
+    bl: {x: cropRect.x1, y: cropRect.y2},
+    br: {x: cropRect.x2, y: cropRect.y2},
+  };
+  for(const key in corners){
+    if(Math.hypot(pos.x - corners[key].x, pos.y - corners[key].y) < CROP_HANDLE_R){
+      cropDragMode = key;
+      return;
+    }
+  }
+  if(pos.x > cropRect.x1 && pos.x < cropRect.x2 && pos.y > cropRect.y1 && pos.y < cropRect.y2){
+    cropDragMode = 'move';
+    cropDragStart = { offX: pos.x - cropRect.x1, offY: pos.y - cropRect.y1, w: cropRect.x2 - cropRect.x1, h: cropRect.y2 - cropRect.y1 };
+  } else {
+    cropDragMode = null;
+  }
+}
+
+function cropMove(e){
+  if(!cropDragMode) return;
+  e.preventDefault();
+  const pos = getCropPos(e);
+  const cw = cropCanvas.width, ch = cropCanvas.height;
+  const clampX = v => Math.max(0, Math.min(cw, v));
+  const clampY = v => Math.max(0, Math.min(ch, v));
+
+  if(cropDragMode === 'tl'){
+    cropRect.x1 = Math.min(clampX(pos.x), cropRect.x2 - CROP_MIN);
+    cropRect.y1 = Math.min(clampY(pos.y), cropRect.y2 - CROP_MIN);
+  } else if(cropDragMode === 'tr'){
+    cropRect.x2 = Math.max(clampX(pos.x), cropRect.x1 + CROP_MIN);
+    cropRect.y1 = Math.min(clampY(pos.y), cropRect.y2 - CROP_MIN);
+  } else if(cropDragMode === 'bl'){
+    cropRect.x1 = Math.min(clampX(pos.x), cropRect.x2 - CROP_MIN);
+    cropRect.y2 = Math.max(clampY(pos.y), cropRect.y1 + CROP_MIN);
+  } else if(cropDragMode === 'br'){
+    cropRect.x2 = Math.max(clampX(pos.x), cropRect.x1 + CROP_MIN);
+    cropRect.y2 = Math.max(clampY(pos.y), cropRect.y1 + CROP_MIN);
+  } else if(cropDragMode === 'move'){
+    let x1 = pos.x - cropDragStart.offX;
+    let y1 = pos.y - cropDragStart.offY;
+    x1 = Math.max(0, Math.min(cw - cropDragStart.w, x1));
+    y1 = Math.max(0, Math.min(ch - cropDragStart.h, y1));
+    cropRect.x1 = x1; cropRect.y1 = y1;
+    cropRect.x2 = x1 + cropDragStart.w; cropRect.y2 = y1 + cropDragStart.h;
+  }
+  renderCrop();
+}
+
+function cropEnd(){ cropDragMode = null; cropDragStart = null; }
+
+function closeCropModal(){
+  cropModal.style.display = 'none';
+  cropImg = null;
+  cropRect = null;
+  cropTarget = null;
+}
+
+function applyCropResult(out){
+  if(cropTarget === 'horse'){
+    setupFrame(out);
+  } else if(cropTarget === 'pad'){
+    if(objects.pad){
+      objects.pad.img = out;
+      objects.pad.h = objects.pad.w * (out.height / out.width);
+    } else if(objects.horse){
+      const w = frameContentW * 0.4;
+      const h = w * (out.height / out.width);
+      objects.pad = { img: out, x: displayCanvas.width/2, y: displayCanvas.height/2, w, h, rot: 0 };
+    }
+    editTarget = 'pad';
+    updateUI();
+  }
+  closeCropModal();
+}
+
+document.getElementById('cropApply').addEventListener('click', () => {
+  savedCropRect[cropTarget] = { ...cropRect };
+
+  const scaleX = cropImg.width / cropCanvas.width;
+  const scaleY = cropImg.height / cropCanvas.height;
+  const sx = cropRect.x1 * scaleX, sy = cropRect.y1 * scaleY;
+  const sw = (cropRect.x2 - cropRect.x1) * scaleX, sh = (cropRect.y2 - cropRect.y1) * scaleY;
+
+  const out = document.createElement('canvas');
+  out.width = Math.round(sw); out.height = Math.round(sh);
+  out.getContext('2d').drawImage(cropImg, sx, sy, sw, sh, 0, 0, out.width, out.height);
+
+  applyCropResult(out);
+});
+
+document.getElementById('cropSkip').addEventListener('click', () => {
+  applyCropResult(cropImg);
+});
+
+document.getElementById('cropChangePhoto').addEventListener('click', () => {
+  if(cropTarget === 'horse') horseFileInput.click();
+  else if(cropTarget === 'pad') padFileInput.click();
+});
+
+syncStagePadding();
+</script>
+
+</body>
+</html>
