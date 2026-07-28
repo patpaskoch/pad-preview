@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0e1013">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>Pad Preview</title>
 <style>
   :root{
@@ -347,6 +348,50 @@
     font-size:.85rem;
     cursor:pointer;
   }
+
+  /* feedback */
+  .feedback-fab{
+    position:fixed;
+    right:16px;
+    bottom:calc(16px + env(safe-area-inset-bottom));
+    z-index:60;
+    width:44px; height:44px;
+    border-radius:50%;
+    background:rgba(201,138,61,.9);
+    color:#181008;
+    border:none;
+    font-size:1.15rem;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow:0 6px 20px rgba(0,0,0,.4);
+  }
+  .feedback-modal .modal{ max-width:420px; }
+  .feedback-modal textarea{
+    width:100%;
+    min-height:100px;
+    background:#1d2126;
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    padding:10px;
+    font-family:inherit;
+    font-size:.85rem;
+    resize:vertical;
+    margin-top:10px;
+  }
+  .feedback-modal select, .feedback-modal input[type=file]{
+    width:100%;
+    background:#1d2126;
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    padding:9px 10px;
+    font-family:inherit;
+    font-size:.85rem;
+    margin-top:10px;
+  }
+  .feedback-modal input[type=file]{ padding:7px; }
+  .feedback-status{ font-size:.8rem; color:var(--muted); margin-top:10px; min-height:1.2em; }
 </style>
 </head>
 <body>
@@ -411,7 +456,55 @@
   </div>
 </div>
 
+<button class="feedback-fab" id="feedbackFab" title="Send feedback">?</button>
+
+<div class="modal-backdrop feedback-modal" id="feedbackModal" style="display:none;">
+  <div class="modal">
+    <h3>Feedback</h3>
+    <p>Found a bug, or have an idea? Let us know.</p>
+    <form id="feedbackForm">
+      <select name="category">
+        <option value="bug">Bug</option>
+        <option value="idea">Idea</option>
+        <option value="other" selected>Other</option>
+      </select>
+      <textarea name="text" placeholder="What's on your mind?" required></textarea>
+      <input type="file" name="screenshot" accept="image/*">
+      <div class="feedback-status" id="feedbackStatus"></div>
+    </form>
+    <div class="modal-actions">
+      <button id="feedbackCancel">Cancel</button>
+      <button class="primary" id="feedbackSubmit">Send</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ---- lightweight usage tracking (see backlog #5) ----
+// fires small POSTs to /log; failures are silently ignored so tracking can
+// never break the app itself.
+function logEvent(type, meta){
+  try{
+    fetch('{{ route('log.store') }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ type, meta, referrer: document.referrer || null }),
+      keepalive: true,
+    }).catch(() => {});
+  }catch(e){}
+}
+
+const sessionStart = Date.now();
+logEvent('pageview');
+
+function sendSessionEnd(){
+  const payload = JSON.stringify({ type: 'session_end', meta: { seconds: Math.round((Date.now() - sessionStart)/1000) } });
+  if(navigator.sendBeacon){
+    navigator.sendBeacon('{{ route('log.store') }}', new Blob([payload], {type:'application/json'}));
+  }
+}
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') sendSessionEnd(); });
+
 const placeholder = document.getElementById('placeholder');
 const displayCanvas = document.getElementById('displayCanvas');
 const displayCtx = displayCanvas.getContext('2d');
@@ -438,6 +531,7 @@ dockToggle.addEventListener('click', () => {
   dockCollapsed = !dockCollapsed;
   dock.classList.toggle('collapsed', dockCollapsed);
   dockToggle.textContent = dockCollapsed ? '⌃' : '⌄';
+  if(dockCollapsed) logEvent('fullscreen_toggled');
   syncStagePadding();
 });
 
@@ -499,6 +593,7 @@ navPad.addEventListener('click', () => {
 });
 navSave.addEventListener('click', () => {
   if(!objects.horse) return;
+  logEvent('export');
   const wasPadded = canvasOffset > 0;
   if(wasPadded){ canvasOffset = 0; displayCanvas.width = frameContentW; displayCanvas.height = frameContentH; }
   render(false);
@@ -547,6 +642,7 @@ compareWrap.addEventListener('touchend', () => { compareDragging = false; });
 
 horseFileInput.addEventListener('change', e => {
   if(!e.target.files[0]) return;
+  logEvent('upload_horse');
   readAsImage(e.target.files[0], img => {
     horseRawImg = img;
     savedCropRect.horse = null;
@@ -556,6 +652,7 @@ horseFileInput.addEventListener('change', e => {
 });
 padFileInput.addEventListener('change', e => {
   if(!e.target.files[0]) return;
+  logEvent('upload_pad');
   readAsImage(e.target.files[0], img => {
     padRawImg = img;
     savedCropRect.pad = null;
@@ -765,7 +862,10 @@ function move(e){
   }
   render();
 }
-function end(){ dragMode = null; dragStart = null; }
+function end(){
+  if(dragMode) logEvent('transform_used', { target: editTarget, mode: dragMode });
+  dragMode = null; dragStart = null;
+}
 
 // two-finger pinch: scale + rotate the active object together, like a
 // standard photo editor gesture. takes over from single-finger dragging
@@ -1086,6 +1186,7 @@ function renderPresetStrip(){
 }
 
 document.getElementById('cropApply').addEventListener('click', () => {
+  logEvent('crop_used', { target: cropTarget });
   savedCropRect[cropTarget] = { ...cropRect };
 
   const scaleX = cropImg.width / cropCanvas.width;
@@ -1107,6 +1208,47 @@ document.getElementById('cropSkip').addEventListener('click', () => {
 document.getElementById('cropChangePhoto').addEventListener('click', () => {
   if(cropTarget === 'horse') horseFileInput.click();
   else if(cropTarget === 'pad') padFileInput.click();
+});
+
+// ---- feedback ----
+const feedbackModal = document.getElementById('feedbackModal');
+const feedbackForm = document.getElementById('feedbackForm');
+const feedbackStatus = document.getElementById('feedbackStatus');
+const feedbackSubmit = document.getElementById('feedbackSubmit');
+
+document.getElementById('feedbackFab').addEventListener('click', () => {
+  feedbackStatus.textContent = '';
+  feedbackForm.reset();
+  feedbackModal.style.display = 'flex';
+});
+document.getElementById('feedbackCancel').addEventListener('click', () => {
+  feedbackModal.style.display = 'none';
+});
+
+feedbackSubmit.addEventListener('click', async () => {
+  const text = feedbackForm.text.value.trim();
+  if(!text){ feedbackStatus.textContent = 'Please write something first.'; return; }
+
+  feedbackSubmit.disabled = true;
+  feedbackStatus.textContent = 'Sending…';
+
+  const formData = new FormData(feedbackForm);
+  const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+  try{
+    const res = await fetch('{{ route('feedback.store') }}', {
+      method: 'POST',
+      headers: { 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+      body: formData,
+    });
+    if(!res.ok) throw new Error('request failed');
+    feedbackStatus.textContent = 'Thanks — sent!';
+    setTimeout(() => { feedbackModal.style.display = 'none'; }, 900);
+  }catch(e){
+    feedbackStatus.textContent = 'Could not send, please try again.';
+  }finally{
+    feedbackSubmit.disabled = false;
+  }
 });
 
 syncStagePadding();
