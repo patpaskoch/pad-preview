@@ -26,6 +26,36 @@
   .empty{ color:var(--muted); font-size:.85rem; padding:16px 0; }
   a{ color:var(--accent); }
   .count{ color:var(--muted); font-size:.78rem; font-weight:400; text-transform:none; letter-spacing:0; }
+
+  .visitor-list{ display:flex; flex-direction:column; gap:8px; }
+  .visitor-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+  }
+  .visitor-card summary{
+    list-style:none; cursor:pointer; padding:12px 14px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    font-size:.82rem;
+  }
+  .visitor-card summary::-webkit-details-marker{ display:none; }
+  .visitor-card summary::before{
+    content:'▸'; color:var(--muted); font-size:.7rem; width:10px; flex-shrink:0;
+    transition:transform .15s;
+  }
+  .visitor-card[open] summary::before{ transform:rotate(90deg); }
+  .visitor-card summary:hover{ background:var(--panel-2); }
+  .v-id{ font-weight:600; }
+  .v-fill{ flex:1; }
+  .visitor-card .visitor-events{ border-top:1px solid var(--line); }
+  .visitor-card .visitor-events table{ margin:0; }
+  .visitor-card .visitor-events th, .visitor-card .visitor-events td{ padding:6px 14px; }
+
+  .summary-grid{ display:flex; flex-wrap:wrap; gap:10px; }
+  .stat{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:14px 18px; min-width:110px;
+  }
+  .stat-num{ display:block; font-size:1.4rem; font-weight:700; }
+  .stat-label{ display:block; color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
 </style>
 </head>
 <body>
@@ -67,25 +97,62 @@
   </section>
 
   <section>
-    <h2>Activity Log <span class="count">(showing {{ count($log) }} of {{ $totalLogEntries }})</span></h2>
-    @if(count($log) === 0)
-      <div class="empty">No activity yet.</div>
+    <h2>Visitors <span class="count">({{ $totalVisitors }} unique, {{ $totalEvents }} events total)</span></h2>
+    @if(count($visitors) === 0)
+      <div class="empty">No visitors yet.</div>
     @else
-      <table>
-        <thead><tr><th>Time</th><th>Event</th><th>Session</th><th>IP</th><th>Referrer</th></tr></thead>
-        <tbody>
-        @foreach($log as $entry)
-          <tr>
-            <td class="muted">{{ $entry['time'] ?? '' }}</td>
-            <td><span class="tag">{{ $entry['type'] ?? '' }}</span></td>
-            <td class="muted">{{ substr($entry['session'] ?? '', 0, 8) }}</td>
-            <td class="muted">{{ $entry['ip'] ?? '' }}</td>
-            <td class="muted">{{ $entry['referrer'] ?? '' }}</td>
-          </tr>
+      <div class="visitor-list">
+        @foreach($visitors as $v)
+          <details class="visitor-card">
+            <summary>
+              <span class="v-id">{{ substr($v['session'], 0, 8) }}</span>
+              <span class="muted">{{ $v['ip'] ?? '—' }}</span>
+              <span class="tag">{{ $v['count'] }} event{{ $v['count'] == 1 ? '' : 's' }}</span>
+              <span class="v-fill"></span>
+              <span class="muted">first: {{ $v['first_seen'] ?? '—' }}</span>
+              <span class="muted">last: {{ $v['last_seen'] ?? '—' }}</span>
+            </summary>
+            <div class="visitor-events">
+              <table>
+                <thead><tr><th>Time</th><th>Event</th><th>Details</th></tr></thead>
+                <tbody>
+                @foreach($v['events'] as $e)
+                  <tr>
+                    <td class="muted">{{ $e['time'] ?? '' }}</td>
+                    <td><span class="tag">{{ $e['type'] ?? '' }}</span></td>
+                    <td class="muted">
+                      {{ !empty($e['meta']) ? json_encode($e['meta']) : '' }}
+                      @if(!empty($e['referrer'])) via {{ $e['referrer'] }} @endif
+                    </td>
+                  </tr>
+                @endforeach
+                </tbody>
+              </table>
+            </div>
+          </details>
         @endforeach
-        </tbody>
-      </table>
+      </div>
     @endif
+  </section>
+
+  <section>
+    <h2>Summary</h2>
+    <div class="summary-grid">
+      <div class="stat">
+        <span class="stat-num">{{ $totalVisitors }}</span>
+        <span class="stat-label">Visitors</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">{{ $totalEvents }}</span>
+        <span class="stat-label">Total events</span>
+      </div>
+      @foreach($eventCounts as $type => $count)
+        <div class="stat">
+          <span class="stat-num">{{ $count }}</span>
+          <span class="stat-label">{{ $type }}</span>
+        </div>
+      @endforeach
+    </div>
   </section>
 </main>
 

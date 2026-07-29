@@ -11,13 +11,45 @@ class AdminController extends Controller
 {
     public function index()
     {
-        $log = array_reverse(YamlStore::all('log'));
+        $rawLog = YamlStore::all('log');
         $feedback = array_reverse(YamlStore::all('feedback'));
 
+        // group individual events into one row per visitor (session id)
+        $bySession = [];
+        foreach ($rawLog as $entry) {
+            $sid = $entry['session'] ?? 'unknown';
+            $bySession[$sid][] = $entry;
+        }
+
+        $visitors = [];
+        foreach ($bySession as $sid => $events) {
+            usort($events, fn ($a, $b) => ($a['time'] ?? '') <=> ($b['time'] ?? ''));
+
+            $visitors[] = [
+                'session' => $sid,
+                'first_seen' => $events[0]['time'] ?? null,
+                'last_seen' => end($events)['time'] ?? null,
+                'ip' => collect($events)->pluck('ip')->filter()->first(),
+                'referrer' => collect($events)->pluck('referrer')->filter()->first(),
+                'count' => count($events),
+                'events' => array_reverse($events),
+            ];
+        }
+        usort($visitors, fn ($a, $b) => ($b['last_seen'] ?? '') <=> ($a['last_seen'] ?? ''));
+
+        $eventCounts = [];
+        foreach ($rawLog as $entry) {
+            $type = $entry['type'] ?? 'unknown';
+            $eventCounts[$type] = ($eventCounts[$type] ?? 0) + 1;
+        }
+        arsort($eventCounts);
+
         return view('admin.index', [
-            'log' => array_slice($log, 0, 300),
+            'visitors' => array_slice($visitors, 0, 200),
+            'totalVisitors' => count($visitors),
+            'totalEvents' => count($rawLog),
+            'eventCounts' => $eventCounts,
             'feedback' => $feedback,
-            'totalLogEntries' => count($log),
         ]);
     }
 
