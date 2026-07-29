@@ -75,13 +75,20 @@
       <div class="empty">No feedback yet.</div>
     @else
       <table>
-        <thead><tr><th>Time</th><th>Category</th><th>Text</th><th>Screenshot</th></tr></thead>
+        <thead><tr><th>Time</th><th>Category</th><th>Text</th><th>Email</th><th>Screenshot</th></tr></thead>
         <tbody>
         @foreach($feedback as $entry)
           <tr>
-            <td class="muted">{{ $entry['time'] ?? '' }}</td>
+            <td class="muted">{{ friendly_date($entry['time'] ?? null) }}</td>
             <td><span class="tag">{{ $entry['category'] ?? 'other' }}</span></td>
             <td>{{ $entry['text'] ?? '' }}</td>
+            <td>
+              @if(!empty($entry['email']))
+                <a href="mailto:{{ $entry['email'] }}">{{ $entry['email'] }}</a>
+              @else
+                <span class="muted">&mdash;</span>
+              @endif
+            </td>
             <td>
               @if(!empty($entry['screenshot']))
                 <a href="{{ route('admin.screenshot', $entry['screenshot']) }}" target="_blank">view</a>
@@ -109,8 +116,8 @@
               <span class="muted">{{ $v['ip'] ?? '—' }}</span>
               <span class="tag">{{ $v['count'] }} event{{ $v['count'] == 1 ? '' : 's' }}</span>
               <span class="v-fill"></span>
-              <span class="muted">first: {{ $v['first_seen'] ?? '—' }}</span>
-              <span class="muted">last: {{ $v['last_seen'] ?? '—' }}</span>
+              <span class="muted">first: {{ friendly_date($v['first_seen']) }}</span>
+              <span class="muted">last: {{ friendly_date($v['last_seen']) }}</span>
             </summary>
             <div class="visitor-events">
               <table>
@@ -118,7 +125,7 @@
                 <tbody>
                 @foreach($v['events'] as $e)
                   <tr>
-                    <td class="muted">{{ $e['time'] ?? '' }}</td>
+                    <td class="muted">{{ friendly_date($e['time'] ?? null) }}</td>
                     <td><span class="tag">{{ $e['type'] ?? '' }}</span></td>
                     <td class="muted">
                       {{ !empty($e['meta']) ? json_encode($e['meta']) : '' }}

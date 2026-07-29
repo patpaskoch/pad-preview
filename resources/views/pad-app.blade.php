@@ -421,7 +421,7 @@
     resize:vertical;
     margin-top:10px;
   }
-  .feedback-modal select, .feedback-modal input[type=file]{
+  .feedback-modal select, .feedback-modal input[type=file], .feedback-modal input[type=email]{
     width:100%;
     background:#1d2126;
     border:1px solid var(--line);
@@ -522,6 +522,7 @@
           <option value="other" selected>Other</option>
         </select>
         <textarea name="text" placeholder="What's on your mind?" required></textarea>
+        <input type="email" name="email" placeholder="Email (optional, if you'd like a reply)">
         <input type="file" name="screenshot" accept="image/*">
         <div class="feedback-status" id="feedbackStatus"></div>
       </form>

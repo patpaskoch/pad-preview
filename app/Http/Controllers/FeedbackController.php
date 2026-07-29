@@ -12,6 +12,7 @@ class FeedbackController extends Controller
         $validated = $request->validate([
             'text' => ['required', 'string', 'max:4000'],
             'category' => ['nullable', 'string', 'in:bug,idea,other'],
+            'email' => ['nullable', 'email', 'max:255'],
             'screenshot' => ['nullable', 'image', 'max:5120'],
         ]);
 
@@ -24,6 +25,7 @@ class FeedbackController extends Controller
             'time' => now()->toIso8601String(),
             'category' => $validated['category'] ?? 'other',
             'text' => $validated['text'],
+            'email' => $validated['email'] ?? null,
             'screenshot' => $screenshotPath,
             'session' => (string) $request->session()->getId(),
         ]);
