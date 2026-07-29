@@ -32,8 +32,9 @@
 
   <h2>Verantwortlicher</h2>
   <p>
-    <span class="placeholder">[Dein Name / Firmenname]</span><br>
-    <span class="placeholder">[Adresse]</span><br>
+    Patrick Koch<br>
+    Oberer Runaweg 13a<br>
+    6800 Vorarlberg, Österreich<br>
     <span class="placeholder">[E-Mail-Adresse]</span>
   </p>
 
