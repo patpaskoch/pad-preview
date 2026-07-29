@@ -35,7 +35,7 @@
     Patrick Koch<br>
     Oberer Runaweg 13a<br>
     6800 Vorarlberg, Österreich<br>
-    <span class="placeholder">[E-Mail-Adresse]</span>
+    <a href="mailto:patpaskoch@gmail.com">patpaskoch@gmail.com</a>
   </p>
 
   <h2>Was diese App macht</h2>
@@ -104,7 +104,7 @@
     <li>Beschwerde bei einer Datenschutz-Aufsichtsbehörde</li>
   </ul>
   <p>
-    Wende dich dazu einfach an <span class="placeholder">[E-Mail-Adresse]</span>.
+    Wende dich dazu einfach an <a href="mailto:patpaskoch@gmail.com">patpaskoch@gmail.com</a>.
   </p>
 
   <div class="note">
