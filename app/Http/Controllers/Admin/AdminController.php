@@ -62,4 +62,25 @@ class AdminController extends Controller
 
         return Storage::disk('local')->response($path);
     }
+
+    // deletes every log entry belonging to one visitor (right to erasure)
+    public function destroyVisitor(string $session)
+    {
+        YamlStore::removeWhere('log', fn ($e) => ($e['session'] ?? null) === $session);
+
+        return back()->with('status', 'Visitor data deleted.');
+    }
+
+    public function destroyFeedback(string $id)
+    {
+        $removed = YamlStore::removeWhere('feedback', fn ($e) => ($e['id'] ?? null) === $id);
+
+        foreach ($removed as $entry) {
+            if (! empty($entry['screenshot'])) {
+                Storage::disk('local')->delete($entry['screenshot']);
+            }
+        }
+
+        return back()->with('status', 'Feedback deleted.');
+    }
 }

@@ -22,6 +22,7 @@ class FeedbackController extends Controller
         }
 
         YamlStore::append('feedback', [
+            'id' => (string) \Illuminate\Support\Str::uuid(),
             'time' => now()->toIso8601String(),
             'category' => $validated['category'] ?? 'other',
             'text' => $validated['text'],

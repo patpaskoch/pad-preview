@@ -67,6 +67,11 @@
     font-weight:700;
     margin-bottom:8px;
   }
+  .placeholder .privacy-link{
+    font-size:.78rem;
+    color:var(--muted);
+    text-decoration:underline;
+  }
 
   /* dock: wraps the navbar + float-controls as a single fixed-positioned,
      collapsible unit. children lay out normally (flex column) inside it,
@@ -434,6 +439,8 @@
   }
   .feedback-modal input[type=file]{ padding:7px; }
   .feedback-status{ font-size:.8rem; color:var(--muted); margin-top:10px; min-height:1.2em; }
+  .privacy-hint{ font-size:.72rem; color:var(--muted); margin:6px 0 0; }
+  .privacy-hint a{ color:var(--accent); }
 </style>
 </head>
 <body>
@@ -443,6 +450,8 @@
     <span class="welcome-title">🤠 Howdy, partner!</span>
     Happy you're here &mdash; let's create something stunning.<br><br>
     Tap <b>Horse</b> below to upload your horse photo, then <b>Pad</b> to add the saddle blanket.
+    <br><br>
+    <a href="{{ url('/privacy') }}" class="privacy-link">Privacy</a>
   </div>
   <canvas id="displayCanvas" style="display:none;"></canvas>
 </div>
@@ -523,6 +532,7 @@
         </select>
         <textarea name="text" placeholder="What's on your mind?" required></textarea>
         <input type="email" name="email" placeholder="Email (optional, if you'd like a reply)">
+        <p class="privacy-hint">Only used to reply to you &mdash; never shared. See our <a href="{{ url('/privacy') }}" target="_blank">privacy policy</a>.</p>
         <input type="file" name="screenshot" accept="image/*">
         <div class="feedback-status" id="feedbackStatus"></div>
       </form>

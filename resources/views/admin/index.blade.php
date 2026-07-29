@@ -56,6 +56,17 @@
   }
   .stat-num{ display:block; font-size:1.4rem; font-weight:700; }
   .stat-label{ display:block; color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+
+  .status-msg{
+    background:rgba(31,158,142,.15); border:1px solid #1f9e8e; color:#7fe0d0;
+    padding:10px 14px; border-radius:8px; font-size:.82rem; margin-bottom:20px;
+  }
+  .btn-danger{
+    background:transparent; border:1px solid #5c1418; color:#e0517a;
+    padding:5px 10px; border-radius:6px; font-size:.72rem; cursor:pointer;
+  }
+  .btn-danger:hover{ background:#5c1418; color:#fff; }
+  .visitor-delete-form{ padding:10px 14px; border-top:1px solid var(--line); }
 </style>
 </head>
 <body>
@@ -69,13 +80,17 @@
 </header>
 
 <main>
+  @if(session('status'))
+    <div class="status-msg">{{ session('status') }}</div>
+  @endif
+
   <section>
     <h2>Feedback ({{ count($feedback) }})</h2>
     @if(count($feedback) === 0)
       <div class="empty">No feedback yet.</div>
     @else
       <table>
-        <thead><tr><th>Time</th><th>Category</th><th>Text</th><th>Email</th><th>Screenshot</th></tr></thead>
+        <thead><tr><th>Time</th><th>Category</th><th>Text</th><th>Email</th><th>Screenshot</th><th></th></tr></thead>
         <tbody>
         @foreach($feedback as $entry)
           <tr>
@@ -94,6 +109,14 @@
                 <a href="{{ route('admin.screenshot', $entry['screenshot']) }}" target="_blank">view</a>
               @else
                 <span class="muted">&mdash;</span>
+              @endif
+            </td>
+            <td>
+              @if(!empty($entry['id']))
+                <form method="POST" action="{{ route('admin.feedback.destroy', $entry['id']) }}" onsubmit="return confirm('Delete this feedback entry?');">
+                  @csrf @method('DELETE')
+                  <button type="submit" class="btn-danger">Delete</button>
+                </form>
               @endif
             </td>
           </tr>
@@ -135,6 +158,10 @@
                 @endforeach
                 </tbody>
               </table>
+              <form method="POST" action="{{ route('admin.visitors.destroy', $v['session']) }}" class="visitor-delete-form" onsubmit="return confirm('Delete all data for this visitor?');">
+                @csrf @method('DELETE')
+                <button type="submit" class="btn-danger">Delete this visitor's data</button>
+              </form>
             </div>
           </details>
         @endforeach

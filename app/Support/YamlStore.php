@@ -37,13 +37,46 @@ class YamlStore
 
     public static function append(string $name, array $entry): void
     {
+        self::withLock($name, function (array $entries) use ($entry) {
+            $entries[] = $entry;
+
+            return $entries;
+        });
+    }
+
+    /**
+     * Remove every entry for which $predicate($entry) is true. Returns the
+     * removed entries (so callers can e.g. clean up files they referenced).
+     */
+    public static function removeWhere(string $name, callable $predicate): array
+    {
+        $removed = [];
+        self::withLock($name, function (array $entries) use ($predicate, &$removed) {
+            $kept = [];
+            foreach ($entries as $entry) {
+                if ($predicate($entry)) {
+                    $removed[] = $entry;
+                } else {
+                    $kept[] = $entry;
+                }
+            }
+
+            return $kept;
+        });
+
+        return $removed;
+    }
+
+    /** Read-modify-write under an exclusive lock; $mutator receives the current entries, returns the new list. */
+    protected static function withLock(string $name, callable $mutator): void
+    {
         $path = self::path($name);
         $handle = fopen($path, 'c+');
         flock($handle, LOCK_EX);
 
         $contents = stream_get_contents($handle);
         $entries = $contents ? (Yaml::parse($contents) ?: []) : [];
-        $entries[] = $entry;
+        $entries = $mutator($entries);
 
         ftruncate($handle, 0);
         rewind($handle);

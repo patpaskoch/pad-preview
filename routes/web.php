@@ -7,6 +7,7 @@ use App\Http\Controllers\LogController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'pad-app');
+Route::view('/privacy', 'privacy');
 
 Route::post('/log', [LogController::class, 'store'])
     ->middleware('throttle:60,1')
@@ -27,4 +28,6 @@ Route::middleware('admin.auth')->group(function () {
     Route::get('/admin/screenshot/{path}', [AdminController::class, 'screenshot'])
         ->where('path', '.*')
         ->name('admin.screenshot');
+    Route::delete('/admin/visitors/{session}', [AdminController::class, 'destroyVisitor'])->name('admin.visitors.destroy');
+    Route::delete('/admin/feedback/{id}', [AdminController::class, 'destroyFeedback'])->name('admin.feedback.destroy');
 });
